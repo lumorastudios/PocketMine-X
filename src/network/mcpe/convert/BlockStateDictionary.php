@@ -25,6 +25,7 @@ namespace pocketmine\network\mcpe\convert;
 
 use pocketmine\data\bedrock\block\BlockStateData;
 use pocketmine\data\bedrock\block\BlockTypeNames;
+use pocketmine\nbt\BigEndianNbtSerializer;
 use pocketmine\nbt\NbtDataException;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\nbt\TreeRoot;
@@ -170,7 +171,9 @@ final class BlockStateDictionary{
 			);
 		}
 
-		$root = (new NetworkNbtSerializer())->read($decompressed)->mustGetCompoundTag();
+		//NOTE: unlike the old raw layout below (and NBT found in the network protocol), the new gzip-wrapped
+		//bedrock-data export for 1.26.40 is standard big-endian NBT, not the little-endian/varint "network" NBT.
+		$root = (new BigEndianNbtSerializer())->read($decompressed)->mustGetCompoundTag();
 		$blocks = $root->getListTag("blocks", CompoundTag::class);
 		if($blocks === null){
 			throw new NbtDataException("Missing \"blocks\" list tag in block palette data");
