@@ -307,6 +307,7 @@ final class CraftingManagerFromDataHelper{
 					if(!is_array($inputData)){
 						continue 2;
 					}
+					/** @phpstan-var array<string, mixed> $inputData */
 					$input = self::deserializeIngredient(self::translateIngredientData($inputData));
 					if($input === null){
 						continue 2;
@@ -318,6 +319,7 @@ final class CraftingManagerFromDataHelper{
 					if(!is_array($outputData)){
 						continue 2;
 					}
+					/** @phpstan-var array<string, mixed> $outputData */
 					$output = self::deserializeItemStack(self::translateItemStackData($outputData));
 					if($output === null){
 						continue 2;
@@ -338,10 +340,13 @@ final class CraftingManagerFromDataHelper{
 					continue;
 				}
 				$inputs = [];
-				foreach($recipe["input"] as $symbol => $inputData){
+				/** @phpstan-var array<string, mixed> $shapedInput */
+				$shapedInput = $recipe["input"];
+				foreach($shapedInput as $symbol => $inputData){
 					if(!is_array($inputData)){
 						continue 2;
 					}
+					/** @phpstan-var array<string, mixed> $inputData */
 					$input = self::deserializeIngredient(self::translateIngredientData($inputData));
 					if($input === null){
 						continue 2;
@@ -353,6 +358,7 @@ final class CraftingManagerFromDataHelper{
 					if(!is_array($outputData)){
 						continue 2;
 					}
+					/** @phpstan-var array<string, mixed> $outputData */
 					$output = self::deserializeItemStack(self::translateItemStackData($outputData));
 					if($output === null){
 						continue 2;
@@ -371,9 +377,15 @@ final class CraftingManagerFromDataHelper{
 				if(!is_array($recipe) || !is_array($recipe["input"] ?? null) || !is_array($recipe["ingredient"] ?? null) || !is_array($recipe["output"] ?? null)){
 					continue;
 				}
-				$input = self::deserializeIngredient(self::translateIngredientData($recipe["input"]));
-				$ingredient = self::deserializeIngredient(self::translateIngredientData($recipe["ingredient"]));
-				$output = self::deserializeItemStack(self::translateItemStackData($recipe["output"]));
+				/** @phpstan-var array<string, mixed> $potionInput */
+				$potionInput = $recipe["input"];
+				/** @phpstan-var array<string, mixed> $potionIngredient */
+				$potionIngredient = $recipe["ingredient"];
+				/** @phpstan-var array<string, mixed> $potionOutput */
+				$potionOutput = $recipe["output"];
+				$input = self::deserializeIngredient(self::translateIngredientData($potionInput));
+				$ingredient = self::deserializeIngredient(self::translateIngredientData($potionIngredient));
+				$output = self::deserializeItemStack(self::translateItemStackData($potionOutput));
 				if($input === null || $ingredient === null || $output === null){
 					continue;
 				}
@@ -385,7 +397,9 @@ final class CraftingManagerFromDataHelper{
 				if(!is_array($recipe) || !is_array($recipe["ingredient"] ?? null) || !is_string($recipe["input"] ?? null) || !is_string($recipe["output"] ?? null)){
 					continue;
 				}
-				$ingredient = self::deserializeIngredient(self::translateIngredientData($recipe["ingredient"]));
+				/** @phpstan-var array<string, mixed> $containerIngredient */
+				$containerIngredient = $recipe["ingredient"];
+				$ingredient = self::deserializeIngredient(self::translateIngredientData($containerIngredient));
 				if($ingredient === null){
 					continue;
 				}
