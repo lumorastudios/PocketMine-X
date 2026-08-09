@@ -70,7 +70,9 @@ final class CreativeInventory{
 
 		/** @var array<int, array{0: CreativeCategory, 1: ?CreativeGroup}> $groups */
 		$groups = [];
-		foreach($table["groups"] as $index => $groupData){
+		/** @phpstan-var array<int, mixed> $groupsRaw */
+		$groupsRaw = $table["groups"];
+		foreach($groupsRaw as $index => $groupData){
 			if(!is_array($groupData) || !isset($groupData["creative_category"]) || !is_int($groupData["creative_category"])){
 				continue;
 			}
@@ -92,7 +94,9 @@ final class CreativeInventory{
 			if(!is_array($itemData) || !isset($itemData["id"]) || !is_string($itemData["id"])){
 				continue;
 			}
-			[$categoryEnum, $group] = $groups[$itemData["group_index"] ?? -1] ?? [CreativeCategory::ITEMS, null];
+			$groupIndexRaw = $itemData["group_index"] ?? -1;
+			$groupIndex = is_int($groupIndexRaw) ? $groupIndexRaw : -1;
+			[$categoryEnum, $group] = $groups[$groupIndex] ?? [CreativeCategory::ITEMS, null];
 
 			$item = CraftingManagerFromDataHelper::deserializeItemStack(new ItemStackData($itemData["id"]));
 			if($item === null){
