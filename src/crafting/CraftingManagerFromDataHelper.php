@@ -342,7 +342,7 @@ final class CraftingManagerFromDataHelper{
 				$inputs = [];
 				/** @phpstan-var array<string, mixed> $shapedInput */
 				$shapedInput = $recipe["input"];
-				foreach($shapedInput as $symbol => $inputData){
+				foreach(Utils::stringifyKeys($shapedInput) as $symbol => $inputData){
 					if(!is_array($inputData)){
 						continue 2;
 					}
