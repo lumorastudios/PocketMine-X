@@ -190,7 +190,6 @@ final class ItemTypeNames{
 	public const DARK_OAK_DOOR = "minecraft:dark_oak_door";
 	public const DARK_OAK_HANGING_SIGN = "minecraft:dark_oak_hanging_sign";
 	public const DARK_OAK_SIGN = "minecraft:dark_oak_sign";
-	public const DEBUG_STICK = "minecraft:debug_stick";
 	public const DIAMOND = "minecraft:diamond";
 	public const DIAMOND_AXE = "minecraft:diamond_axe";
 	public const DIAMOND_BOOTS = "minecraft:diamond_boots";
@@ -569,6 +568,7 @@ final class ItemTypeNames{
 	public const SUGAR_CANE = "minecraft:sugar_cane";
 	public const SULFUR_CUBE_BUCKET = "minecraft:sulfur_cube_bucket";
 	public const SULFUR_CUBE_SPAWN_EGG = "minecraft:sulfur_cube_spawn_egg";
+	public const SULFUR_SPIKE = "minecraft:sulfur_spike";
 	public const SUSPICIOUS_STEW = "minecraft:suspicious_stew";
 	public const SWEET_BERRIES = "minecraft:sweet_berries";
 	public const TADPOLE_BUCKET = "minecraft:tadpole_bucket";
