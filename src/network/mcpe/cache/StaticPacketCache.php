@@ -26,20 +26,16 @@ namespace pocketmine\network\mcpe\cache;
 use pocketmine\color\Color;
 use pocketmine\data\bedrock\BedrockDataFiles;
 use pocketmine\data\SavedDataLoadingException;
+use pocketmine\nbt\BigEndianNbtSerializer;
+use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\network\mcpe\protocol\AvailableActorIdentifiersPacket;
 use pocketmine\network\mcpe\protocol\BiomeDefinitionListPacket;
-use pocketmine\network\mcpe\protocol\serializer\NetworkNbtSerializer;
 use pocketmine\network\mcpe\protocol\types\biome\BiomeDefinitionEntry;
 use pocketmine\network\mcpe\protocol\types\CacheableNbt;
 use pocketmine\utils\Filesystem;
 use pocketmine\utils\SingletonTrait;
-use pocketmine\utils\Utils;
-use pocketmine\world\biome\model\BiomeDefinitionEntryData;
 use function count;
-use function get_debug_type;
 use function gzdecode;
-use function is_array;
-use function json_decode;
 
 class StaticPacketCache{
 	use SingletonTrait;
@@ -50,57 +46,81 @@ class StaticPacketCache{
 	private static function loadCompoundFromFile(string $filePath) : CacheableNbt{
 		$raw = Filesystem::fileGetContents($filePath);
 		$decompressed = @gzdecode($raw);
-		return new CacheableNbt((new NetworkNbtSerializer())->read($decompressed !== false ? $decompressed : $raw)->mustGetCompoundTag());
+		return new CacheableNbt((new BigEndianNbtSerializer())->read($decompressed !== false ? $decompressed : $raw)->mustGetCompoundTag());
 	}
 
 	/**
+	 * bedrock-data 1.26.40+ ships biome_definitions as gzip-compressed big-endian NBT instead of JSON.
+	 * The root compound has a shared "biomeStringList" string pool (used for both biome names and tag names)
+	 * and a "biomeData" list of entries shaped like {index: short index into biomeStringList, data: compound
+	 * of the actual biome properties}. "data.tags" is itself a single-key wrapper compound containing the
+	 * real "tags" list (list of short indices into biomeStringList). "data.chunkGenData" (terrain feature
+	 * placement rules) is intentionally not parsed here, since BiomeDefinitionEntry doesn't need it.
+	 *
 	 * @return list<BiomeDefinitionEntry>
 	 */
 	private static function loadBiomeDefinitionModel(string $filePath) : array{
 		$raw = Filesystem::fileGetContents($filePath);
-		$biomeEntries = json_decode($raw, associative: true);
-		if(!is_array($biomeEntries)){
-			//bedrock-data 1.26.40+ ships biome_definitions as compressed NBT instead of JSON; we don't have a parser
-			//for that format yet, so fall back to an empty biome list rather than crashing server startup entirely.
-			//biome-specific client rendering hints (fog, water colour, etc.) won't be accurate until this is implemented.
-			return [];
+		$decompressed = @gzdecode($raw);
+		$root = (new BigEndianNbtSerializer())->read($decompressed !== false ? $decompressed : $raw)->mustGetCompoundTag();
+
+		$stringListTag = $root->getListTag("biomeStringList");
+		$biomeDataListTag = $root->getListTag("biomeData");
+		if($stringListTag === null || $biomeDataListTag === null){
+			throw new SavedDataLoadingException("$filePath is missing the biomeStringList/biomeData tags");
 		}
 
-		$jsonMapper = new \JsonMapper();
-		$jsonMapper->bExceptionOnMissingData = true;
-		$jsonMapper->bStrictObjectTypeChecking = true;
-		$jsonMapper->bEnforceMapType = false;
+		$stringList = [];
+		foreach($stringListTag as $stringTag){
+			$stringList[] = (string) $stringTag->getValue();
+		}
 
 		$entries = [];
-		foreach(Utils::promoteKeys($biomeEntries) as $biomeName => $entry){
-			if(!is_array($entry)){
-				throw new SavedDataLoadingException("$filePath should be an array of objects, got " . get_debug_type($entry));
+		foreach($biomeDataListTag as $biomeEntryTag){
+			if(!($biomeEntryTag instanceof CompoundTag)){
+				continue;
+			}
+			$biomeName = $stringList[$biomeEntryTag->getShort("index", -1)] ?? null;
+			$data = $biomeEntryTag->getCompoundTag("data");
+			if($biomeName === null || $data === null){
+				continue;
 			}
 
-			try{
-				$biomeDefinition = $jsonMapper->map($entry, new BiomeDefinitionEntryData());
-
-				$mapWaterColour = $biomeDefinition->mapWaterColour;
-				$entries[] = new BiomeDefinitionEntry(
-					(string) $biomeName,
-					$biomeDefinition->id,
-					$biomeDefinition->temperature,
-					$biomeDefinition->downfall,
-					$biomeDefinition->foliageSnow,
-					$biomeDefinition->depth,
-					$biomeDefinition->scale,
-					new Color(
-						$mapWaterColour->r,
-						$mapWaterColour->g,
-						$mapWaterColour->b,
-						$mapWaterColour->a
-					),
-					$biomeDefinition->rain,
-					count($biomeDefinition->tags) > 0 ? $biomeDefinition->tags : null,
-				);
-			}catch(\JsonMapper_Exception $e){
-				throw new \RuntimeException($e->getMessage(), 0, $e);
+			$tags = null;
+			$tagsWrapper = $data->getCompoundTag("tags");
+			$tagsListTag = $tagsWrapper !== null ? $tagsWrapper->getListTag("tags") : null;
+			if($tagsListTag !== null){
+				$tagNames = [];
+				foreach($tagsListTag as $tagIndexTag){
+					$resolvedTag = $stringList[(int) $tagIndexTag->getValue()] ?? null;
+					if($resolvedTag !== null){
+						$tagNames[] = $resolvedTag;
+					}
+				}
+				if(count($tagNames) > 0){
+					$tags = $tagNames;
+				}
 			}
+
+			$waterColorRaw = $data->getInt("mapWaterColorARGB", 0) & 0xFFFFFFFF;
+
+			$entries[] = new BiomeDefinitionEntry(
+				$biomeName,
+				$data->getShort("id", -1),
+				$data->getFloat("temperature", 0.0),
+				$data->getFloat("downfall", 0.0),
+				$data->getFloat("foliageSnow", 0.0),
+				$data->getFloat("depth", 0.0),
+				$data->getFloat("scale", 0.0),
+				new Color(
+					($waterColorRaw >> 16) & 0xFF,
+					($waterColorRaw >> 8) & 0xFF,
+					$waterColorRaw & 0xFF,
+					($waterColorRaw >> 24) & 0xFF,
+				),
+				$data->getByte("rain", 0) !== 0,
+				$tags,
+			);
 		}
 
 		return $entries;
