@@ -72,15 +72,19 @@ class ChunkRequestTask extends AsyncTask{
 		$subCount = ChunkSerializer::getSubChunkCount($chunk, $dimensionId);
 		$converter = TypeConverter::getInstance();
 		$payload = ChunkSerializer::serializeFullChunk($chunk, $dimensionId, $converter->getBlockTranslator(), $this->tiles);
+		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) dim=$dimensionId subCount=$subCount payloadBytes=" . strlen($payload));
 
 		$stream = new ByteBufferWriter();
 		PacketBatch::encodePackets($stream, [LevelChunkPacket::create(new ChunkPosition($this->chunkX, $this->chunkZ), $dimensionId, $subCount, null, false, [], $payload)]);
 
 		$compressor = $this->compressor->deserialize();
-		$this->setResult(chr($compressor->getNetworkId()) . $compressor->compress($stream->getData()));
+		$result = chr($compressor->getNetworkId()) . $compressor->compress($stream->getData());
+		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) compressed result " . strlen($result) . " bytes");
+		$this->setResult($result);
 	}
 
 	public function onCompletion() : void{
+		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) onCompletion firing, resolving promise");
 		/** @var CompressBatchPromise $promise */
 		$promise = $this->fetchLocal(self::TLS_KEY_PROMISE);
 		$promise->resolve($this->getResult());
