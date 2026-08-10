@@ -30,6 +30,8 @@ use pocketmine\nbt\NbtDataException;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\nbt\TreeRoot;
 use pocketmine\network\mcpe\protocol\serializer\NetworkNbtSerializer;
+use pocketmine\network\mcpe\protocol\types\BlockPaletteEntry;
+use pocketmine\network\mcpe\protocol\types\CacheableNbt;
 use pocketmine\utils\Utils;
 use function array_key_first;
 use function array_map;
@@ -57,6 +59,12 @@ final class BlockStateDictionary{
 	 * @phpstan-var array<string, array<int, int>|int>|null
 	 */
 	private ?array $idMetaToStateIdLookupCache = null;
+
+	/**
+	 * @var BlockPaletteEntry[]|null
+	 * @phpstan-var list<BlockPaletteEntry>|null
+	 */
+	private ?array $blockPaletteEntriesCache = null;
 
 	/**
 	 * @param BlockStateDictionaryEntry[] $states
@@ -110,6 +118,30 @@ final class BlockStateDictionary{
 
 	public function generateDataFromStateId(int $networkRuntimeId) : ?BlockStateData{
 		return ($this->states[$networkRuntimeId] ?? null)?->generateStateData();
+	}
+
+	/**
+	 * Returns the full block palette in network runtime ID order (list position == network runtime ID), ready
+	 * to be sent to the client via StartGamePacket. Without this, the client has no block definitions at all
+	 * and will reject the connection as soon as it needs to make sense of any block data.
+	 *
+	 * @return BlockPaletteEntry[]
+	 * @phpstan-return list<BlockPaletteEntry>
+	 */
+	public function getBlockPaletteEntries() : array{
+		if($this->blockPaletteEntriesCache === null){
+			$entries = [];
+			foreach($this->states as $stateEntry){
+				$stateData = $stateEntry->generateStateData();
+				$statesTag = CompoundTag::create();
+				foreach(Utils::stringifyKeys($stateData->getStates()) as $key => $value){
+					$statesTag->setTag($key, $value);
+				}
+				$entries[] = new BlockPaletteEntry($stateData->getName(), new CacheableNbt($statesTag));
+			}
+			$this->blockPaletteEntriesCache = $entries;
+		}
+		return $this->blockPaletteEntriesCache;
 	}
 
 	/**
