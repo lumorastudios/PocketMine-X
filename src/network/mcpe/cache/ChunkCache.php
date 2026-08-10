@@ -107,6 +107,7 @@ class ChunkCache implements ChunkListener{
 
 		$this->world->timings->syncChunkSendPrepare->startTiming();
 		try{
+			\GlobalLogger::get()->debug("ChunkCache: dispatching ChunkRequestTask for chunk ($chunkX, $chunkZ) dim={$this->dimensionId}");
 			$promise = new CompressBatchPromise();
 
 			$this->world->getServer()->getAsyncPool()->submitTask(
