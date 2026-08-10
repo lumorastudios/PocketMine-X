@@ -28,6 +28,8 @@ use pocketmine\data\bedrock\BedrockDataFiles;
 use pocketmine\data\SavedDataLoadingException;
 use pocketmine\nbt\BigEndianNbtSerializer;
 use pocketmine\nbt\tag\CompoundTag;
+use pocketmine\nbt\tag\ShortTag;
+use pocketmine\nbt\tag\StringTag;
 use pocketmine\network\mcpe\protocol\AvailableActorIdentifiersPacket;
 use pocketmine\network\mcpe\protocol\BiomeDefinitionListPacket;
 use pocketmine\network\mcpe\protocol\types\biome\BiomeDefinitionEntry;
@@ -41,7 +43,7 @@ class StaticPacketCache{
 	use SingletonTrait;
 
 	/**
-	 * @phpstan-return CacheableNbt<\pocketmine\nbt\tag\CompoundTag>
+	 * @phpstan-return CacheableNbt<CompoundTag>
 	 */
 	private static function loadCompoundFromFile(string $filePath) : CacheableNbt{
 		$raw = Filesystem::fileGetContents($filePath);
@@ -64,7 +66,7 @@ class StaticPacketCache{
 		$decompressed = @gzdecode($raw);
 		$root = (new BigEndianNbtSerializer())->read($decompressed !== false ? $decompressed : $raw)->mustGetCompoundTag();
 
-		$stringListTag = $root->getListTag("biomeStringList");
+		$stringListTag = $root->getListTag("biomeStringList", StringTag::class);
 		$biomeDataListTag = $root->getListTag("biomeData");
 		if($stringListTag === null || $biomeDataListTag === null){
 			throw new SavedDataLoadingException("$filePath is missing the biomeStringList/biomeData tags");
@@ -72,7 +74,7 @@ class StaticPacketCache{
 
 		$stringList = [];
 		foreach($stringListTag as $stringTag){
-			$stringList[] = (string) $stringTag->getValue();
+			$stringList[] = $stringTag->getValue();
 		}
 
 		$entries = [];
@@ -88,11 +90,11 @@ class StaticPacketCache{
 
 			$tags = null;
 			$tagsWrapper = $data->getCompoundTag("tags");
-			$tagsListTag = $tagsWrapper !== null ? $tagsWrapper->getListTag("tags") : null;
+			$tagsListTag = $tagsWrapper !== null ? $tagsWrapper->getListTag("tags", ShortTag::class) : null;
 			if($tagsListTag !== null){
 				$tagNames = [];
 				foreach($tagsListTag as $tagIndexTag){
-					$resolvedTag = $stringList[(int) $tagIndexTag->getValue()] ?? null;
+					$resolvedTag = $stringList[$tagIndexTag->getValue()] ?? null;
 					if($resolvedTag !== null){
 						$tagNames[] = $resolvedTag;
 					}
