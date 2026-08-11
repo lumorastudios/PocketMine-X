@@ -61,6 +61,7 @@ use pocketmine\world\format\io\GlobalBlockStateHandlers;
 use pocketmine\world\format\io\GlobalItemDataHandlers;
 use function get_class;
 use function hash;
+use function microtime;
 
 class TypeConverter{
 	use SingletonTrait;
@@ -80,16 +81,23 @@ class TypeConverter{
 
 	public function __construct(){
 		//TODO: inject stuff via constructor
+		\GlobalLogger::get()->debug("TypeConverter::__construct START at " . microtime(true));
 		$this->blockItemIdMap = BlockItemIdMap::getInstance();
+		\GlobalLogger::get()->debug("TypeConverter: got BlockItemIdMap at " . microtime(true));
 
 		$canonicalBlockStatesRaw = Filesystem::fileGetContents(BedrockDataFiles::BLOCK_PALETTE_NBT);
 		$metaMappingRaw = Filesystem::fileGetContents(BedrockDataFiles::BLOCK_STATE_META_MAP_JSON);
+		\GlobalLogger::get()->debug("TypeConverter: read block palette files at " . microtime(true));
+		$blockStateDictionary = BlockStateDictionary::loadFromString($canonicalBlockStatesRaw, $metaMappingRaw);
+		\GlobalLogger::get()->debug("TypeConverter: loaded BlockStateDictionary at " . microtime(true));
 		$this->blockTranslator = new BlockTranslator(
-			BlockStateDictionary::loadFromString($canonicalBlockStatesRaw, $metaMappingRaw),
+			$blockStateDictionary,
 			GlobalBlockStateHandlers::getSerializer()
 		);
+		\GlobalLogger::get()->debug("TypeConverter: built BlockTranslator at " . microtime(true));
 
 		$this->itemTypeDictionary = ItemTypeDictionaryFromDataHelper::loadFromString(Filesystem::fileGetContents(BedrockDataFiles::ITEM_PALETTE_JSON));
+		\GlobalLogger::get()->debug("TypeConverter: loaded ItemTypeDictionary at " . microtime(true));
 		$this->shieldRuntimeId = $this->itemTypeDictionary->fromStringId(ItemTypeNames::SHIELD);
 
 		$this->itemTranslator = new ItemTranslator(
@@ -99,8 +107,10 @@ class TypeConverter{
 			GlobalItemDataHandlers::getDeserializer(),
 			$this->blockItemIdMap
 		);
+		\GlobalLogger::get()->debug("TypeConverter: built ItemTranslator at " . microtime(true));
 
 		$this->skinAdapter = new LegacySkinAdapter();
+		\GlobalLogger::get()->debug("TypeConverter::__construct END at " . microtime(true));
 	}
 
 	public function getBlockTranslator() : BlockTranslator{ return $this->blockTranslator; }
