@@ -37,6 +37,7 @@ use pocketmine\thread\NonThreadSafeValue;
 use pocketmine\world\format\Chunk;
 use pocketmine\world\format\io\FastChunkSerializer;
 use function chr;
+use function microtime;
 use function strlen;
 
 class ChunkRequestTask extends AsyncTask{
@@ -67,11 +68,14 @@ class ChunkRequestTask extends AsyncTask{
 	}
 
 	public function onRun() : void{
+		\GlobalLogger::get()->debug("ChunkRequestTask: onRun START for chunk ($this->chunkX, $this->chunkZ) at " . microtime(true));
 		$chunk = FastChunkSerializer::deserializeTerrain($this->chunk);
 		$dimensionId = $this->dimensionId;
+		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) deserialized terrain at " . microtime(true));
 
 		$subCount = ChunkSerializer::getSubChunkCount($chunk, $dimensionId);
 		$converter = TypeConverter::getInstance();
+		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) got TypeConverter at " . microtime(true));
 		$payload = ChunkSerializer::serializeFullChunk($chunk, $dimensionId, $converter->getBlockTranslator(), $this->tiles);
 		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) dim=$dimensionId subCount=$subCount payloadBytes=" . strlen($payload));
 
