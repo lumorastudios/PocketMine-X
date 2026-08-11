@@ -42,6 +42,7 @@ use function is_array;
 use function is_int;
 use function is_string;
 use function json_decode;
+use function microtime;
 use const JSON_THROW_ON_ERROR;
 
 /**
@@ -224,6 +225,7 @@ final class BlockStateDictionary{
 	}
 
 	public static function loadFromString(string $blockPaletteContents, string $metaMapContents) : self{
+		\GlobalLogger::get()->debug("BlockStateDictionary::loadFromString START at " . microtime(true));
 		$metaMap = json_decode($metaMapContents, flags: JSON_THROW_ON_ERROR);
 		if(!is_array($metaMap)){
 			throw new \InvalidArgumentException("Invalid metaMap, expected array for root type, got " . get_debug_type($metaMap));
@@ -240,8 +242,12 @@ final class BlockStateDictionary{
 				$uniqueNames[$value] = $value;
 			}
 		}
+		\GlobalLogger::get()->debug("BlockStateDictionary::loadFromString built uniqueNames at " . microtime(true));
 
-		foreach(self::loadPaletteFromString($blockPaletteContents) as $i => $state){
+		$palette = self::loadPaletteFromString($blockPaletteContents);
+		\GlobalLogger::get()->debug("BlockStateDictionary::loadFromString parsed NBT palette (" . count($palette) . " entries) at " . microtime(true));
+
+		foreach($palette as $i => $state){
 			$meta = $metaMap[$i] ?? null;
 			if($meta === null){
 				throw new \InvalidArgumentException("Missing associated meta value for state $i (" . $state->toNbt() . ")");
@@ -252,7 +258,10 @@ final class BlockStateDictionary{
 			$uniqueName = $uniqueNames[$state->getName()] ??= $state->getName();
 			$entries[$i] = new BlockStateDictionaryEntry($uniqueName, $state->getStates(), $meta);
 		}
+		\GlobalLogger::get()->debug("BlockStateDictionary::loadFromString built " . count($entries) . " entries at " . microtime(true));
 
-		return new self($entries);
+		$result = new self($entries);
+		\GlobalLogger::get()->debug("BlockStateDictionary::loadFromString END at " . microtime(true));
+		return $result;
 	}
 }
