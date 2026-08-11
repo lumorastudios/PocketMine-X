@@ -133,6 +133,7 @@ use function implode;
 use function in_array;
 use function is_string;
 use function json_encode;
+use function microtime;
 use function ord;
 use function random_bytes;
 use function str_split;
@@ -1050,8 +1051,10 @@ class NetworkSession{
 	}
 
 	public function notifyTerrainReady() : void{
+		\GlobalLogger::get()->debug("NetworkSession: notifyTerrainReady called at " . microtime(true));
 		$this->logger->debug("Sending spawn notification, waiting for spawn response");
 		$this->sendDataPacket(PlayStatusPacket::create(PlayStatusPacket::PLAYER_SPAWN));
+		\GlobalLogger::get()->debug("NetworkSession: PLAYER_SPAWN PlayStatusPacket sent at " . microtime(true));
 		$this->setHandler(new SpawnResponsePacketHandler($this->onClientSpawnResponse(...)));
 	}
 
