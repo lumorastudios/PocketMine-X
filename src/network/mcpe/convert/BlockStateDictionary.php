@@ -25,24 +25,18 @@ namespace pocketmine\network\mcpe\convert;
 
 use pocketmine\data\bedrock\block\BlockStateData;
 use pocketmine\data\bedrock\block\BlockTypeNames;
-use pocketmine\nbt\BigEndianNbtSerializer;
 use pocketmine\nbt\NbtDataException;
-use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\nbt\TreeRoot;
 use pocketmine\network\mcpe\protocol\serializer\NetworkNbtSerializer;
-use pocketmine\network\mcpe\protocol\types\BlockPaletteEntry;
-use pocketmine\network\mcpe\protocol\types\CacheableNbt;
 use pocketmine\utils\Utils;
 use function array_key_first;
 use function array_map;
 use function count;
 use function get_debug_type;
-use function gzdecode;
 use function is_array;
 use function is_int;
 use function is_string;
 use function json_decode;
-use function microtime;
 use const JSON_THROW_ON_ERROR;
 
 /**
@@ -60,12 +54,6 @@ final class BlockStateDictionary{
 	 * @phpstan-var array<string, array<int, int>|int>|null
 	 */
 	private ?array $idMetaToStateIdLookupCache = null;
-
-	/**
-	 * @var BlockPaletteEntry[]|null
-	 * @phpstan-var list<BlockPaletteEntry>|null
-	 */
-	private ?array $blockPaletteEntriesCache = null;
 
 	/**
 	 * @param BlockStateDictionaryEntry[] $states
@@ -122,30 +110,6 @@ final class BlockStateDictionary{
 	}
 
 	/**
-	 * Returns the full block palette in network runtime ID order (list position == network runtime ID), ready
-	 * to be sent to the client via StartGamePacket. Without this, the client has no block definitions at all
-	 * and will reject the connection as soon as it needs to make sense of any block data.
-	 *
-	 * @return BlockPaletteEntry[]
-	 * @phpstan-return list<BlockPaletteEntry>
-	 */
-	public function getBlockPaletteEntries() : array{
-		if($this->blockPaletteEntriesCache === null){
-			$entries = [];
-			foreach($this->states as $stateEntry){
-				$stateData = $stateEntry->generateStateData();
-				$statesTag = CompoundTag::create();
-				foreach(Utils::stringifyKeys($stateData->getStates()) as $key => $value){
-					$statesTag->setTag($key, $value);
-				}
-				$entries[] = new BlockPaletteEntry($stateData->getName(), new CacheableNbt($statesTag));
-			}
-			$this->blockPaletteEntriesCache = $entries;
-		}
-		return $this->blockPaletteEntriesCache;
-	}
-
-	/**
 	 * Searches for the appropriate state ID which matches the given blockstate NBT.
 	 * Returns null if there were no matches.
 	 */
@@ -195,37 +159,13 @@ final class BlockStateDictionary{
 	 * @throws NbtDataException
 	 */
 	public static function loadPaletteFromString(string $blockPaletteContents) : array{
-		$decompressed = @gzdecode($blockPaletteContents);
-		if($decompressed === false){
-			//not gzip-compressed - assume it's already a raw sequence of NBT roots (older bedrock-data layout)
-			return array_map(
-				fn(TreeRoot $root) => BlockStateData::fromNbt($root->mustGetCompoundTag()),
-				(new NetworkNbtSerializer())->readMultiple($blockPaletteContents)
-			);
-		}
-
-		//NOTE: unlike the old raw layout below (and NBT found in the network protocol), the new gzip-wrapped
-		//bedrock-data export for 1.26.40 is standard big-endian NBT, not the little-endian/varint "network" NBT.
-		$root = (new BigEndianNbtSerializer())->read($decompressed)->mustGetCompoundTag();
-		$blocks = $root->getListTag("blocks", CompoundTag::class);
-		if($blocks === null){
-			throw new NbtDataException("Missing \"blocks\" list tag in block palette data");
-		}
-		$result = [];
-		foreach($blocks as $entry){
-			if(!($entry instanceof CompoundTag)){
-				throw new NbtDataException("Expected \"blocks\" list entries to be compound tags");
-			}
-			//these are extra bookkeeping fields added by newer bedrock-data exports; BlockStateData doesn't
-			//tolerate unrecognised keys, and we don't currently make use of the explicit network ID / hash
-			$entry->removeTag("network_id", "name_hash");
-			$result[] = BlockStateData::fromNbt($entry);
-		}
-		return $result;
+		return array_map(
+			fn(TreeRoot $root) => BlockStateData::fromNbt($root->mustGetCompoundTag()),
+			(new NetworkNbtSerializer())->readMultiple($blockPaletteContents)
+		);
 	}
 
 	public static function loadFromString(string $blockPaletteContents, string $metaMapContents) : self{
-		\GlobalLogger::get()->debug("BlockStateDictionary::loadFromString START at " . microtime(true));
 		$metaMap = json_decode($metaMapContents, flags: JSON_THROW_ON_ERROR);
 		if(!is_array($metaMap)){
 			throw new \InvalidArgumentException("Invalid metaMap, expected array for root type, got " . get_debug_type($metaMap));
@@ -242,12 +182,8 @@ final class BlockStateDictionary{
 				$uniqueNames[$value] = $value;
 			}
 		}
-		\GlobalLogger::get()->debug("BlockStateDictionary::loadFromString built uniqueNames at " . microtime(true));
 
-		$palette = self::loadPaletteFromString($blockPaletteContents);
-		\GlobalLogger::get()->debug("BlockStateDictionary::loadFromString parsed NBT palette (" . count($palette) . " entries) at " . microtime(true));
-
-		foreach($palette as $i => $state){
+		foreach(self::loadPaletteFromString($blockPaletteContents) as $i => $state){
 			$meta = $metaMap[$i] ?? null;
 			if($meta === null){
 				throw new \InvalidArgumentException("Missing associated meta value for state $i (" . $state->toNbt() . ")");
@@ -258,10 +194,7 @@ final class BlockStateDictionary{
 			$uniqueName = $uniqueNames[$state->getName()] ??= $state->getName();
 			$entries[$i] = new BlockStateDictionaryEntry($uniqueName, $state->getStates(), $meta);
 		}
-		\GlobalLogger::get()->debug("BlockStateDictionary::loadFromString built " . count($entries) . " entries at " . microtime(true));
 
-		$result = new self($entries);
-		\GlobalLogger::get()->debug("BlockStateDictionary::loadFromString END at " . microtime(true));
-		return $result;
+		return new self($entries);
 	}
 }

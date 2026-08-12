@@ -25,7 +25,6 @@ namespace pocketmine\command\defaults;
 
 use pocketmine\command\CommandSender;
 use pocketmine\lang\KnownTranslationFactory;
-use pocketmine\multiversion\MultiVersionInfo;
 use pocketmine\network\mcpe\protocol\ProtocolInfo;
 use pocketmine\permission\DefaultPermissionNames;
 use pocketmine\plugin\Plugin;
@@ -61,14 +60,9 @@ class VersionCommand extends VanillaCommand{
 				$versionColor . VersionInfo::VERSION()->getFullVersion() . TextFormat::RESET,
 				TextFormat::GREEN . VersionInfo::GIT_HASH() . TextFormat::RESET
 			));
-			$supportedProtocols = MultiVersionInfo::getSupportedProtocols();
-			$protocolDisplay = count($supportedProtocols) > 1
-				? implode(", ", $supportedProtocols) . " (multi-version)"
-				: (string) ProtocolInfo::CURRENT_PROTOCOL;
-
 			$sender->sendMessage(KnownTranslationFactory::pocketmine_command_version_minecraftVersion(
-				TextFormat::GREEN . MultiVersionInfo::getVersionRangeString() . TextFormat::RESET,
-				TextFormat::GREEN . $protocolDisplay . TextFormat::RESET
+				TextFormat::GREEN . ProtocolInfo::MINECRAFT_VERSION_NETWORK . TextFormat::RESET,
+				TextFormat::GREEN . ProtocolInfo::CURRENT_PROTOCOL . TextFormat::RESET
 			));
 			$sender->sendMessage(KnownTranslationFactory::pocketmine_command_version_phpVersion(TextFormat::GREEN . PHP_VERSION . TextFormat::RESET));
 

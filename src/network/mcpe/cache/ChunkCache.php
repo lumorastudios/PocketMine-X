@@ -33,7 +33,6 @@ use pocketmine\world\ChunkListenerNoOpTrait;
 use pocketmine\world\format\Chunk;
 use pocketmine\world\World;
 use function is_string;
-use function microtime;
 use function spl_object_id;
 use function strlen;
 
@@ -108,7 +107,6 @@ class ChunkCache implements ChunkListener{
 
 		$this->world->timings->syncChunkSendPrepare->startTiming();
 		try{
-			\GlobalLogger::get()->debug("ChunkCache: dispatching ChunkRequestTask for chunk ($chunkX, $chunkZ) dim={$this->dimensionId} at " . microtime(true));
 			$promise = new CompressBatchPromise();
 
 			$this->world->getServer()->getAsyncPool()->submitTask(

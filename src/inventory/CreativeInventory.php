@@ -24,20 +24,16 @@ declare(strict_types=1);
 namespace pocketmine\inventory;
 
 use pocketmine\crafting\CraftingManagerFromDataHelper;
-use pocketmine\crafting\json\ItemStackData;
 use pocketmine\data\bedrock\BedrockDataFiles;
+use pocketmine\inventory\json\CreativeGroupData;
 use pocketmine\item\Item;
 use pocketmine\lang\Translatable;
-use pocketmine\utils\AssumptionFailedError;
 use pocketmine\utils\DestructorCallbackTrait;
-use pocketmine\utils\Filesystem;
 use pocketmine\utils\ObjectSet;
 use pocketmine\utils\SingletonTrait;
+use Symfony\Component\Filesystem\Path;
+use function array_filter;
 use function array_map;
-use function is_array;
-use function is_int;
-use function is_string;
-use function json_decode;
 
 final class CreativeInventory{
 	use SingletonTrait;
@@ -55,54 +51,31 @@ final class CreativeInventory{
 	private function __construct(){
 		$this->contentChangedCallbacks = new ObjectSet();
 
-		$categoryByNumericId = [
-			1 => CreativeCategory::CONSTRUCTION,
-			2 => CreativeCategory::NATURE,
-			3 => CreativeCategory::EQUIPMENT,
-			4 => CreativeCategory::ITEMS,
-		];
+		foreach([
+			"construction" => CreativeCategory::CONSTRUCTION,
+			"nature" => CreativeCategory::NATURE,
+			"equipment" => CreativeCategory::EQUIPMENT,
+			"items" => CreativeCategory::ITEMS,
+		] as $categoryId => $categoryEnum){
+			$groups = CraftingManagerFromDataHelper::loadJsonArrayOfObjectsFile(
+				Path::join(BedrockDataFiles::CREATIVE, $categoryId . ".json"),
+				CreativeGroupData::class
+			);
 
-		$raw = Filesystem::fileGetContents(BedrockDataFiles::CREATIVE_ITEMS_JSON);
-		$table = json_decode($raw, true);
-		if(!is_array($table) || !isset($table["groups"]) || !is_array($table["groups"]) || !isset($table["items"]) || !is_array($table["items"])){
-			throw new AssumptionFailedError("Invalid creative_items.json format");
-		}
+			foreach($groups as $groupData){
+				$icon = $groupData->group_icon === null ? null : CraftingManagerFromDataHelper::deserializeItemStack($groupData->group_icon);
 
-		/** @var array<int, array{0: CreativeCategory, 1: ?CreativeGroup}> $groups */
-		$groups = [];
-		/** @phpstan-var array<int, mixed> $groupsRaw */
-		$groupsRaw = $table["groups"];
-		foreach($groupsRaw as $index => $groupData){
-			if(!is_array($groupData) || !isset($groupData["creative_category"]) || !is_int($groupData["creative_category"])){
-				continue;
-			}
-			$categoryEnum = $categoryByNumericId[$groupData["creative_category"]] ?? CreativeCategory::ITEMS;
+				$group = $icon === null ? null : new CreativeGroup(
+					new Translatable($groupData->group_name),
+					$icon
+				);
 
-			$group = null;
-			$groupName = $groupData["name"] ?? null;
-			$icon = $groupData["icon"] ?? null;
-			if(is_string($groupName) && $groupName !== "" && is_array($icon) && isset($icon["id"]) && is_string($icon["id"])){
-				$iconItem = CraftingManagerFromDataHelper::deserializeItemStack(new ItemStackData($icon["id"]));
-				if($iconItem !== null){
-					$group = new CreativeGroup(new Translatable($groupName), $iconItem);
+				$items = array_filter(array_map(static fn($itemStack) => CraftingManagerFromDataHelper::deserializeItemStack($itemStack), $groupData->items));
+
+				foreach($items as $item){
+					$this->add($item, $categoryEnum, $group);
 				}
 			}
-			$groups[$index] = [$categoryEnum, $group];
-		}
-
-		foreach($table["items"] as $itemData){
-			if(!is_array($itemData) || !isset($itemData["id"]) || !is_string($itemData["id"])){
-				continue;
-			}
-			$groupIndexRaw = $itemData["group_index"] ?? -1;
-			$groupIndex = is_int($groupIndexRaw) ? $groupIndexRaw : -1;
-			[$categoryEnum, $group] = $groups[$groupIndex] ?? [CreativeCategory::ITEMS, null];
-
-			$item = CraftingManagerFromDataHelper::deserializeItemStack(new ItemStackData($itemData["id"]));
-			if($item === null){
-				continue;
-			}
-			$this->add($item, $categoryEnum, $group);
 		}
 	}
 

@@ -37,7 +37,6 @@ use pocketmine\item\Item;
 use pocketmine\lang\KnownTranslationFactory;
 use pocketmine\lang\Translatable;
 use pocketmine\math\Vector3;
-use pocketmine\multiversion\legacy\LegacyPacketRegistry;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\nbt\tag\StringTag;
 use pocketmine\network\FilterNoisyPacketException;
@@ -133,7 +132,6 @@ use function implode;
 use function in_array;
 use function is_string;
 use function json_encode;
-use function microtime;
 use function ord;
 use function random_bytes;
 use function str_split;
@@ -211,14 +209,6 @@ class NetworkSession{
 
 	private string $noisyPacketBuffer = "";
 	private int $noisyPacketsDropped = 0;
-
-	/**
-	 * Protokol Minecraft asli yang dilaporkan client saat handshake (RequestNetworkSettingsPacket).
-	 * Dipakai untuk dukungan multi-version: kode lain bisa mengecek nilai ini untuk
-	 * memutuskan cara encode/decode packet atau mapping block/item yang sesuai untuk sesi ini.
-	 * Default ke ProtocolInfo::CURRENT_PROTOCOL sampai handshake benar-benar selesai.
-	 */
-	private int $protocolVersion = ProtocolInfo::CURRENT_PROTOCOL;
 
 	public function __construct(
 		private Server $server,
@@ -459,7 +449,6 @@ class NetworkSession{
 					}
 
 					$this->gamePacketLimiter->decrement();
-					$buffer = LegacyPacketRegistry::translateIncoming($this->protocolVersion, $buffer);
 					$packet = $this->packetPool->getPacket($buffer);
 					if($packet === null){
 						$this->logger->debug("Unknown packet: " . base64_encode($buffer));
@@ -621,8 +610,7 @@ class NetworkSession{
 			$writer = new ByteBufferWriter();
 			foreach($packets as $evPacket){
 				$writer->clear(); //memory reuse let's gooooo
-				$modernBuffer = self::encodePacketTimed($writer, $evPacket);
-				$this->addToSendBuffer(LegacyPacketRegistry::translateOutgoing($this->protocolVersion, $evPacket, $modernBuffer));
+				$this->addToSendBuffer(self::encodePacketTimed($writer, $evPacket));
 			}
 			if($immediate){
 				$this->flushGamePacketQueue();
@@ -711,16 +699,6 @@ class NetworkSession{
 	}
 
 	public function getTypeConverter() : TypeConverter{ return $this->typeConverter; }
-
-	/**
-	 * Protokol Minecraft asli yang dilaporkan client ini (lihat properti $protocolVersion).
-	 */
-	public function getProtocolVersion() : int{ return $this->protocolVersion; }
-
-	/**
-	 * @internal Hanya dipanggil oleh SessionStartPacketHandler saat handshake berhasil.
-	 */
-	public function setProtocolVersion(int $protocolVersion) : void{ $this->protocolVersion = $protocolVersion; }
 
 	public function queueCompressed(CompressBatchPromise|string $payload, bool $immediate = false) : void{
 		Timings::$playerNetworkSend->startTiming();
@@ -1051,10 +1029,8 @@ class NetworkSession{
 	}
 
 	public function notifyTerrainReady() : void{
-		\GlobalLogger::get()->debug("NetworkSession: notifyTerrainReady called at " . microtime(true));
 		$this->logger->debug("Sending spawn notification, waiting for spawn response");
 		$this->sendDataPacket(PlayStatusPacket::create(PlayStatusPacket::PLAYER_SPAWN));
-		\GlobalLogger::get()->debug("NetworkSession: PLAYER_SPAWN PlayStatusPacket sent at " . microtime(true));
 		$this->setHandler(new SpawnResponsePacketHandler($this->onClientSpawnResponse(...)));
 	}
 
@@ -1373,7 +1349,7 @@ class NetworkSession{
 
 	public function onPlayerRemoved(Player $p) : void{
 		if($p !== $this->player){
-			$this->sendDataPacket(PlayerListPacket::remove([PlayerListEntry::createRemovalEntry($p->getUniqueId())]));
+			$this->sendDataPacket(PlayerListPacket::remove([$p->getUniqueId()]));
 		}
 	}
 

@@ -27,7 +27,6 @@ use pocketmine\entity\InvalidSkinException;
 use pocketmine\event\player\PlayerPreLoginEvent;
 use pocketmine\lang\KnownTranslationFactory;
 use pocketmine\lang\Translatable;
-use pocketmine\multiversion\legacy\LegacyPacketRegistry;
 use pocketmine\network\mcpe\auth\ProcessOpenIdLoginTask;
 use pocketmine\network\mcpe\auth\ProcessSelfSignedLoginTask;
 use pocketmine\network\mcpe\JwtException;
@@ -284,19 +283,6 @@ class LoginPacketHandler extends PacketHandler{
 			[, $clientDataClaims, ] = JwtUtils::parse($clientDataJwt);
 		}catch(JwtException $e){
 			throw PacketHandlingException::wrap($e);
-		}
-
-		//MultiVersion: client protokol lama (1.26.0/1.26.10/1.26.20) tidak mengirim
-		//beberapa claim baru yang ditandai @required di kelas ClientData versi
-		//1.26.30 ini. Tanpa ini, JsonMapper akan melempar exception dan client lama
-		//gagal login sama sekali. Field lama yang sudah dihapus (mis. IsEditorMode)
-		//tidak perlu ditangani karena cuma memicu warning, bukan error.
-		if(LegacyPacketRegistry::isLegacySession($this->session->getProtocolVersion())){
-			$clientDataClaims += [
-				"ClientEditorConnectionIntent" => 0,
-				"ClientIsEditorCapable" => false,
-				"FilterProfanity" => false,
-			];
 		}
 
 		$mapper = $this->defaultJsonMapper("ClientData JWT body");

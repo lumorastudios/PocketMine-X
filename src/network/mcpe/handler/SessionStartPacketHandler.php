@@ -23,9 +23,9 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\handler;
 
-use pocketmine\multiversion\MultiVersionInfo;
 use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\protocol\NetworkSettingsPacket;
+use pocketmine\network\mcpe\protocol\ProtocolInfo;
 use pocketmine\network\mcpe\protocol\RequestNetworkSettingsPacket;
 
 final class SessionStartPacketHandler extends PacketHandler{
@@ -46,10 +46,6 @@ final class SessionStartPacketHandler extends PacketHandler{
 			return true;
 		}
 
-		//Simpan protokol asli client di sesi ini (dipakai untuk multi-version:
-		//keputusan encode/decode packet & mapping block/item per protokol nantinya).
-		$this->session->setProtocolVersion($protocolVersion);
-
 		//TODO: we're filling in the defaults to get pre-1.19.30 behaviour back for now, but we should explore the new options in the future
 		$this->session->sendDataPacket(NetworkSettingsPacket::create(
 			NetworkSettingsPacket::COMPRESS_EVERYTHING,
@@ -64,6 +60,6 @@ final class SessionStartPacketHandler extends PacketHandler{
 	}
 
 	protected function isCompatibleProtocol(int $protocolVersion) : bool{
-		return MultiVersionInfo::isProtocolSupported($protocolVersion);
+		return $protocolVersion === ProtocolInfo::CURRENT_PROTOCOL;
 	}
 }

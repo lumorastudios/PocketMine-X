@@ -37,8 +37,6 @@ use pocketmine\thread\NonThreadSafeValue;
 use pocketmine\world\format\Chunk;
 use pocketmine\world\format\io\FastChunkSerializer;
 use function chr;
-use function microtime;
-use function strlen;
 
 class ChunkRequestTask extends AsyncTask{
 	private const TLS_KEY_PROMISE = "promise";
@@ -68,28 +66,21 @@ class ChunkRequestTask extends AsyncTask{
 	}
 
 	public function onRun() : void{
-		\GlobalLogger::get()->debug("ChunkRequestTask: onRun START for chunk ($this->chunkX, $this->chunkZ) at " . microtime(true));
 		$chunk = FastChunkSerializer::deserializeTerrain($this->chunk);
 		$dimensionId = $this->dimensionId;
-		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) deserialized terrain at " . microtime(true));
 
 		$subCount = ChunkSerializer::getSubChunkCount($chunk, $dimensionId);
 		$converter = TypeConverter::getInstance();
-		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) got TypeConverter at " . microtime(true));
 		$payload = ChunkSerializer::serializeFullChunk($chunk, $dimensionId, $converter->getBlockTranslator(), $this->tiles);
-		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) dim=$dimensionId subCount=$subCount payloadBytes=" . strlen($payload));
 
 		$stream = new ByteBufferWriter();
 		PacketBatch::encodePackets($stream, [LevelChunkPacket::create(new ChunkPosition($this->chunkX, $this->chunkZ), $dimensionId, $subCount, null, false, [], $payload)]);
 
 		$compressor = $this->compressor->deserialize();
-		$result = chr($compressor->getNetworkId()) . $compressor->compress($stream->getData());
-		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) compressed result " . strlen($result) . " bytes");
-		$this->setResult($result);
+		$this->setResult(chr($compressor->getNetworkId()) . $compressor->compress($stream->getData()));
 	}
 
 	public function onCompletion() : void{
-		\GlobalLogger::get()->debug("ChunkRequestTask: chunk ($this->chunkX, $this->chunkZ) onCompletion firing, resolving promise");
 		/** @var CompressBatchPromise $promise */
 		$promise = $this->fetchLocal(self::TLS_KEY_PROMISE);
 		$promise->resolve($this->getResult());

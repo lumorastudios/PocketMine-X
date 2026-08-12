@@ -56,7 +56,6 @@ use pocketmine\network\mcpe\compression\CompressBatchTask;
 use pocketmine\network\mcpe\compression\Compressor;
 use pocketmine\network\mcpe\compression\ZlibCompressor;
 use pocketmine\network\mcpe\convert\TypeConverter;
-use pocketmine\network\mcpe\convert\TypeConverterWarmupTask;
 use pocketmine\network\mcpe\encryption\EncryptionContext;
 use pocketmine\network\mcpe\EntityEventBroadcaster;
 use pocketmine\network\mcpe\NetworkSession;
@@ -905,13 +904,6 @@ class Server{
 			$this->profilingTickRate = $this->configGroup->getPropertyInt(Yml::SETTINGS_PROFILE_REPORT_TRIGGER, self::TARGET_TICKS_PER_SECOND);
 
 			$this->asyncPool = new AsyncPool($poolSize, max(-1, $this->configGroup->getPropertyInt(Yml::MEMORY_ASYNC_WORKER_HARD_LIMIT, 256)), $this->autoloader, $this->logger, $this->tickSleeper);
-			//Building the block palette (16000+ entries) is measurably much slower the first time it runs in a
-			//freshly-started worker thread than on an already-warmed thread. Without this, the first player to
-			//request chunks from a freshly-started worker can time out waiting for chunk data before the worker
-			//finishes warming up. Pay that cost now, during startup, instead of during a player's first join.
-			for($i = 0; $i < $poolSize; ++$i){
-				$this->asyncPool->submitTaskToWorker(new TypeConverterWarmupTask(), $i);
-			}
 			$this->asyncPool->addWorkerStartHook(function(int $i) : void{
 				if(TimingsHandler::isEnabled()){
 					$this->asyncPool->submitTaskToWorker(TimingsControlTask::setEnabled(true), $i);
@@ -1018,7 +1010,7 @@ class Server{
 
 			$this->commandMap = new SimpleCommandMap($this);
 
-			$this->craftingManager = CraftingManagerFromDataHelper::makeFromRecipesJson(BedrockDataFiles::RECIPES_JSON);
+			$this->craftingManager = CraftingManagerFromDataHelper::make(BedrockDataFiles::RECIPES);
 
 			$this->resourceManager = new ResourcePackManager(Path::join($this->dataPath, "resource_packs"), $this->logger);
 

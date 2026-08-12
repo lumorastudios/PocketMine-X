@@ -50,23 +50,11 @@ final class ItemTypeDictionaryFromDataHelper{
 		$nbtSerializer = new LittleEndianNbtSerializer();
 
 		$params = [];
-		if(isset($table["items"]) && is_array($table["items"])){
-			//bedrock-data 1.26.40+ layout: {"items": [{"name": ..., "id": ..., "version": ..., "component_based": ...}, ...]}
-			//component_nbt is no longer embedded per-item here (moved to a separate item_components.nbt export we don't join yet)
-			foreach($table["items"] as $entry){
-				if(!is_array($entry) || !isset($entry["name"], $entry["id"], $entry["component_based"], $entry["version"]) || !is_string($entry["name"]) || !is_int($entry["id"]) || !is_bool($entry["component_based"]) || !is_int($entry["version"])){
-					throw new AssumptionFailedError("Invalid item list format");
-				}
-				$params[] = new ItemTypeEntry($entry["name"], $entry["id"], $entry["component_based"], $entry["version"], $emptyNBT);
+		foreach(Utils::promoteKeys($table) as $name => $entry){
+			if(!is_array($entry) || !is_string($name) || !isset($entry["component_based"], $entry["runtime_id"], $entry["version"]) || !is_bool($entry["component_based"]) || !is_int($entry["runtime_id"]) || !is_int($entry["version"]) || !(is_string($componentNbt = $entry["component_nbt"] ?? null) || $componentNbt === null)){
+				throw new AssumptionFailedError("Invalid item list format");
 			}
-		}else{
-			//older bedrock-data layout: {"minecraft:some_item": {"component_based": ..., "runtime_id": ..., "version": ..., "component_nbt": ...|null}, ...}
-			foreach(Utils::promoteKeys($table) as $name => $entry){
-				if(!is_array($entry) || !is_string($name) || !isset($entry["component_based"], $entry["runtime_id"], $entry["version"]) || !is_bool($entry["component_based"]) || !is_int($entry["runtime_id"]) || !is_int($entry["version"]) || !(is_string($componentNbt = $entry["component_nbt"] ?? null) || $componentNbt === null)){
-					throw new AssumptionFailedError("Invalid item list format");
-				}
-				$params[] = new ItemTypeEntry($name, $entry["runtime_id"], $entry["component_based"], $entry["version"], $componentNbt === null ? $emptyNBT : new CacheableNbt($nbtSerializer->read(ErrorToExceptionHandler::trapAndRemoveFalse(fn() => base64_decode($componentNbt, true)))->mustGetCompoundTag()));
-			}
+			$params[] = new ItemTypeEntry($name, $entry["runtime_id"], $entry["component_based"], $entry["version"], $componentNbt === null ? $emptyNBT : new CacheableNbt($nbtSerializer->read(ErrorToExceptionHandler::trapAndRemoveFalse(fn() => base64_decode($componentNbt, true)))->mustGetCompoundTag()));
 		}
 		return new ItemTypeDictionary($params);
 	}
